@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tank Battle Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div class="game-title">
+        <h1>TANK <span>BATTLE</span></h1>
+        <div class="title-decoration"></div>
+    </div>
+    
+    <!-- Options Menu -->
+    <div id="optionsMenu" class="options-menu">
+        <div class="options-container">
+            <h2>Select Your Options</h2>
+            
+            <!-- Game Mode Selection -->
+            <div class="selection-container">
+                <div class="selection-title">Game Mode</div>
+                <div class="option-cards">
+                    <div class="option-card selected" data-mode="2d">
+                        <div class="mode-preview mode-2d"></div>
+                        <h3>2D Classic</h3>
+                        <p>Top-down 2D battlefield</p>
+                    </div>
+                    <div class="option-card" data-mode="3d">
+                        <div class="mode-preview mode-3d"></div>
+                        <h3>3D Modern</h3>
+                        <p>Immersive 3D experience</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="selection-container">
+                <div class="selection-title">Tank Type</div>
+                <div class="option-cards">
+                    <div class="option-card selected" data-tank="default">
+                        <div class="tank-preview tank-default"></div>
+                        <h3>Defender</h3>
+                        <div class="stat-bar">
+                            <span>Speed</span>
+                            <div class="stat-value" style="width: 70%"></div>
+                        </div>
+                        <div class="stat-bar">
+                            <span>Armor</span>
+                            <div class="stat-value" style="width: 80%"></div>
+                        </div>
+                    </div>
+                    <div class="option-card" data-tank="speeder">
+                        <div class="tank-preview tank-speeder"></div>
+                        <h3>Speeder</h3>
+                        <div class="stat-bar">
+                            <span>Speed</span>
+                            <div class="stat-value" style="width: 90%"></div>
+                        </div>
+                        <div class="stat-bar">
+                            <span>Armor</span>
+                            <div class="stat-value" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    <div class="option-card" data-tank="heavy">
+                        <div class="tank-preview tank-heavy"></div>
+                        <h3>Heavy</h3>
+                        <div class="stat-bar">
+                            <span>Speed</span>
+                            <div class="stat-value" style="width: 40%"></div>
+                        </div>
+                        <div class="stat-bar">
+                            <span>Armor</span>
+                            <div class="stat-value" style="width: 95%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="selection-container">
+                <div class="selection-title">Weapon</div>
+                <div class="option-cards">
+                    <div class="option-card selected" data-weapon="standard">
+                        <div class="weapon-preview weapon-standard"></div>
+                        <h3>Standard</h3>
+                        <div class="stat-bar">
+                            <span>Damage</span>
+                            <div class="stat-value" style="width: 70%"></div>
+                        </div>
+                        <div class="stat-bar">
+                            <span>Reload</span>
+                            <div class="stat-value" style="width: 70%"></div>
+                        </div>
+                    </div>
+                    <div class="option-card" data-weapon="rapid">
+                        <div class="weapon-preview weapon-rapid"></div>
+                        <h3>Rapid Fire</h3>
+                        <div class="stat-bar">
+                            <span>Damage</span>
+                            <div class="stat-value" style="width: 50%"></div>
+                        </div>
+                        <div class="stat-bar">
+                            <span>Reload</span>
+                            <div class="stat-value" style="width: 95%"></div>
+                        </div>
+                    </div>
+                    <div class="option-card" data-weapon="cannon">
+                        <div class="weapon-preview weapon-cannon"></div>
+                        <h3>Cannon</h3>
+                        <div class="stat-bar">
+                            <span>Damage</span>
+                            <div class="stat-value" style="width: 95%"></div>
+                        </div>
+                        <div class="stat-bar">
+                            <span>Reload</span>
+                            <div class="stat-value" style="width: 40%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="selection-container">
+                <div class="selection-title">Special Bomb</div>
+                <div class="option-cards">
+                    <div class="option-card selected" data-bomb="cluster">
+                        <div class="bomb-preview bomb-cluster"></div>
+                        <h3>Cluster</h3>
+                        <p>Splits into multiple bombs</p>
+                    </div>
+                    <div class="option-card" data-bomb="emp">
+                        <div class="bomb-preview bomb-emp"></div>
+                        <h3>EMP</h3>
+                        <p>Freezes enemies briefly</p>
+                    </div>
+                    <div class="option-card" data-bomb="nuke">
+                        <div class="bomb-preview bomb-nuke"></div>
+                        <h3>Nuke</h3>
+                        <p>Massive damage in large area</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="selection-container">
+                <div class="selection-title">Sound Settings</div>
+                <div class="sound-controls">
+                    <div class="sound-option">
+                        <label for="soundToggle">Sound Effects:</label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="soundToggle" checked>
+                            <span class="slider"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="startGameButton" class="start-button">START BATTLE</button>
+        </div>
+    </div>
+    
+    <div id="gameContainer" class="game-container" style="display: none;">
+        <div class="hud">
+            <div class="health-bar">
+                <div class="health-label">Health:</div>
+                <div class="health-value" id="playerHealth">100</div>
+            </div>
+            <div class="score">Score: <span id="score">0</span></div>
+            <div class="special-bomb" id="specialBomb">
+                <div class="bomb-icon"></div>
+                <div class="bomb-count">1</div>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="threeDContainer" style="display: none;"></div>
+        <div id="gameOver" class="game-over">
+            <h2>Game Over</h2>
+            <p>Your Score: <span id="finalScore">0</span></p>
+            <div class="game-over-buttons">
+                <button id="restartButton">Restart</button>
+                <button id="optionsButton">Change Loadout</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="controls-info">
+        <p>Controls: <span class="key">WASD</span> or <span class="key">Arrow Keys</span> to move, <span class="key">Spacebar</span> to fire, <span class="key">B</span> for special bomb, <span class="key">R</span> to restart</p>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html> 
