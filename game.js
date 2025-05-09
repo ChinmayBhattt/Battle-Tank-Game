@@ -19,6 +19,18 @@ const PLAYER_DAMAGE_MULTIPLIER = 2.0; // Player bullets do 200% of their normal 
 const HEALTH_PICKUP_INTERVAL = 15000; // Health pickup every 15 seconds
 const HEALTH_PICKUP_AMOUNT = 50; // Amount of health restored
 
+// Device detection
+let isMobile = false;
+let isTablet = false;
+
+// Mobile controls variables
+let joystickActive = false;
+let joystickPosition = { x: 0, y: 0 };
+let joystickKnobPosition = { x: 0, y: 0 };
+let joystickCenter = { x: 0, y: 0 };
+let joystickMaxRadius = 40;
+let joystickVector = { x: 0, y: 0 };
+
 // Game Mode Variable
 let gameMode = '2d'; // '2d' or '3d'
 
@@ -345,23 +357,55 @@ class Tank {
     handlePlayerMovement() {
         // Forward/Backward movement
         let isMoving = false;
-        if (keys.ArrowUp || keys.w) {
-            this.x += Math.cos(this.rotation) * this.speed;
-            this.y += Math.sin(this.rotation) * this.speed;
-            isMoving = true;
-        }
-        if (keys.ArrowDown || keys.s) {
-            this.x -= Math.cos(this.rotation) * this.speed;
-            this.y -= Math.sin(this.rotation) * this.speed;
-            isMoving = true;
-        }
+        
+        if (isMobile || isTablet) {
+            // Mobile joystick control
+            if (joystickActive) {
+                // Move based on joystick vector
+                const moveAngle = Math.atan2(joystickVector.y, joystickVector.x);
+                
+                // Set rotation to follow joystick direction
+                // Smooth rotation to avoid jerky movement
+                const targetRotation = moveAngle;
+                const rotationDiff = normalizeAngle(targetRotation - this.rotation);
+                
+                // Rotate tank toward joystick direction
+                if (Math.abs(rotationDiff) > 0.05) {
+                    if (rotationDiff > 0) {
+                        this.rotation += Math.min(this.rotationSpeed * 1.5, rotationDiff);
+                    } else {
+                        this.rotation += Math.max(-this.rotationSpeed * 1.5, rotationDiff);
+                    }
+                }
+                
+                // Move forward based on joystick distance from center
+                const joystickDistance = Math.sqrt(joystickVector.x * joystickVector.x + joystickVector.y * joystickVector.y);
+                if (joystickDistance > 0.1) {
+                    this.x += Math.cos(this.rotation) * this.speed * joystickDistance;
+                    this.y += Math.sin(this.rotation) * this.speed * joystickDistance;
+                    isMoving = true;
+                }
+            }
+        } else {
+            // Desktop keyboard controls
+            if (keys.ArrowUp || keys.w) {
+                this.x += Math.cos(this.rotation) * this.speed;
+                this.y += Math.sin(this.rotation) * this.speed;
+                isMoving = true;
+            }
+            if (keys.ArrowDown || keys.s) {
+                this.x -= Math.cos(this.rotation) * this.speed;
+                this.y -= Math.sin(this.rotation) * this.speed;
+                isMoving = true;
+            }
 
-        // Rotation
-        if (keys.ArrowLeft || keys.a) {
-            this.rotation -= this.rotationSpeed;
-        }
-        if (keys.ArrowRight || keys.d) {
-            this.rotation += this.rotationSpeed;
+            // Rotation
+            if (keys.ArrowLeft || keys.a) {
+                this.rotation -= this.rotationSpeed;
+            }
+            if (keys.ArrowRight || keys.d) {
+                this.rotation += this.rotationSpeed;
+            }
         }
 
         // Update track animation if moving
@@ -422,10 +466,15 @@ class Tank {
             if (this.trackOffset > 10) this.trackOffset = 0;
         }
 
-        // Fire at player if aimed correctly (within a tolerance) and cooldown is over
+        // OPTIMIZATION: Reduce firing frequency and add distance check
         const weaponConfig = WEAPON_TYPES[this.weapon];
         const angleDifference = Math.abs(normalizeAngle(angleToPlayer - this.rotation));
-        if (angleDifference < 0.2 && Date.now() - this.lastFireTime > weaponConfig.cooldown) {
+        // Only fire if well-aimed, not too often, and within a reasonable distance
+        if (angleDifference < 0.2 && 
+            Date.now() - this.lastFireTime > weaponConfig.cooldown * 1.5 && // Increased cooldown by 50%
+            distanceToPlayer < 300 && // Don't fire if too far away
+            enemyBullets.length < MAX_ENEMIES * 2 && // Limit total enemy bullets
+            Math.random() > 0.3) { // Add randomness to firing (70% chance to fire when conditions met)
             this.fire();
         }
     }
@@ -661,11 +710,14 @@ class Bullet {
 
     update() {
         // Add current position to trail
-        this.trail.push({x: this.x, y: this.y});
-        
-        // Limit trail length
-        if (this.trail.length > this.trailMaxLength) {
-            this.trail.shift();
+        if (this.trail.length < this.trailMaxLength) {
+            this.trail.push({x: this.x, y: this.y});
+        } else {
+            // Shift array only when needed, using direct index assignment for better performance
+            for (let i = 0; i < this.trailMaxLength - 1; i++) {
+                this.trail[i] = this.trail[i + 1];
+            }
+            this.trail[this.trailMaxLength - 1] = {x: this.x, y: this.y};
         }
         
         // Update position
@@ -690,38 +742,32 @@ class Bullet {
         // Only draw in 2D mode
         if (gameMode === '3d') return;
         
-        // Draw bullet trail
-        for (let i = 0; i < this.trail.length; i++) {
-            const alpha = i / this.trail.length;
-            const size = this.width * (0.5 + 0.5 * alpha);
-            
-            ctx.fillStyle = this.isPlayerBullet 
-                ? `rgba(${hexToRgb(this.color)}, ${alpha})` 
-                : `rgba(${hexToRgb(this.color)}, ${alpha})`;
-            
-            ctx.beginPath();
-            ctx.arc(this.trail[i].x, this.trail[i].y, size / 2, 0, Math.PI * 2);
-            ctx.fill();
+        // Draw bullet trail (simplified for performance)
+        const trailLength = this.trail.length;
+        if (trailLength > 0) {
+            for (let i = 0; i < trailLength; i += 2) { // Skip every other point for performance
+                const alpha = i / trailLength;
+                const size = this.width * (0.5 + 0.5 * alpha);
+                
+                ctx.fillStyle = this.isPlayerBullet 
+                    ? `rgba(${hexToRgb(this.color)}, ${alpha})` 
+                    : `rgba(${hexToRgb(this.color)}, ${alpha})`;
+                
+                ctx.beginPath();
+                ctx.arc(this.trail[i].x, this.trail[i].y, size / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
         
-        // Draw main bullet
-        const gradient = ctx.createRadialGradient(
-            this.x, this.y, 0,
-            this.x, this.y, this.width / 2
-        );
-        
-        gradient.addColorStop(0, '#FFF');
-        gradient.addColorStop(0.7, this.color);
-        gradient.addColorStop(1, darkenColor(this.color, 20));
-        
-        ctx.fillStyle = gradient;
+        // Draw main bullet (simplified gradient for performance)
+        ctx.fillStyle = this.color;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.width / 2, 0, Math.PI * 2);
         ctx.fill();
         
-        // Add glow effect
+        // Add simplified glow effect
         ctx.shadowColor = this.color;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 5; // Reduced blur for performance
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.width / 2, 0, Math.PI * 2);
         ctx.fill();
@@ -732,22 +778,34 @@ class Bullet {
         // Don't hit your own tanks
         if (this.isPlayerBullet === tank.isPlayer) return false;
         
-        // Simple circle-rectangle collision detection
-        const distX = Math.abs(this.x - tank.x);
-        const distY = Math.abs(this.y - tank.y);
+        // Quick bounding box check first (faster than circle calculation)
+        const halfTankWidth = tank.width / 2;
+        const halfTankHeight = tank.height / 2;
+        const bulletRadius = this.width / 2;
         
-        if (distX > (tank.width / 2 + this.width / 2) || 
-            distY > (tank.height / 2 + this.width / 2)) {
+        if (this.x + bulletRadius < tank.x - halfTankWidth || 
+            this.x - bulletRadius > tank.x + halfTankWidth ||
+            this.y + bulletRadius < tank.y - halfTankHeight || 
+            this.y - bulletRadius > tank.y + halfTankHeight) {
             return false;
         }
         
-        if (distX <= tank.width / 2 || distY <= tank.height / 2) {
+        // More accurate circle-rectangle collision only if bounding box check passes
+        const distX = Math.abs(this.x - tank.x);
+        const distY = Math.abs(this.y - tank.y);
+        
+        if (distX > (halfTankWidth + bulletRadius) || 
+            distY > (halfTankHeight + bulletRadius)) {
+            return false;
+        }
+        
+        if (distX <= halfTankWidth || distY <= halfTankHeight) {
             return true;
         }
         
-        const dx = distX - tank.width / 2;
-        const dy = distY - tank.height / 2;
-        return (dx * dx + dy * dy <= (this.width / 2) * (this.width / 2));
+        const dx = distX - halfTankWidth;
+        const dy = distY - halfTankHeight;
+        return (dx * dx + dy * dy <= bulletRadius * bulletRadius);
     }
 }
 
@@ -944,7 +1002,18 @@ function createShockwave(x, y, radius) {
 // Effects functions
 function createExplosion(x, y, scale = 1, color = null) {
     const colors = color ? [color, lightenColor(color, 20), '#FFFFFF'] : ['#E74C3C', '#F39C12', '#F1C40F', '#FFFFFF'];
-    const particleCount = PARTICLE_COUNT * scale;
+    
+    // Reduce particle count when there are already many particles
+    const currentParticleCount = particles.length;
+    let particleCount = PARTICLE_COUNT * scale;
+    
+    // Scale down particle count if there are already many particles
+    if (currentParticleCount > 50) {
+        particleCount = Math.floor(particleCount / 2);
+    }
+    if (currentParticleCount > 100) {
+        particleCount = Math.floor(particleCount / 2);
+    }
     
     for (let i = 0; i < particleCount; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -1279,8 +1348,14 @@ function gameLoop() {
     // Update player health in UI
     document.getElementById('playerHealth').textContent = Math.round(player.health);
     
+    // Process a limited number of particles per frame
+    let maxParticleUpdates = 30;
+    
     // Update and draw particles
     for (let i = particles.length - 1; i >= 0; i--) {
+        if (maxParticleUpdates <= 0) break;
+        maxParticleUpdates--;
+        
         if (!particles[i].update()) {
             particles.splice(i, 1);
             continue;
@@ -1297,8 +1372,13 @@ function gameLoop() {
         pickups[i].draw();
     }
     
+    // Process a limited number of bullets per frame
+    let maxBulletUpdates = 20;
+    
     // Update and draw player bullets
-    for (let i = bullets.length - 1; i >= 0; i--) {
+    for (let i = bullets.length - 1; i >= 0 && maxBulletUpdates > 0; i--) {
+        maxBulletUpdates--;
+        
         const bullet = bullets[i];
         if (!bullet.update()) {
             bullets.splice(i, 1);
@@ -1307,26 +1387,49 @@ function gameLoop() {
         
         bullet.draw();
         
-        // Check for collisions with enemies
-        for (const enemy of enemies) {
-            if (bullet.checkCollision(enemy)) {
-                // Apply player damage multiplier to make enemies die faster
-                enemy.takeDamage(bullet.damage * PLAYER_DAMAGE_MULTIPLIER);
-                
-                // Create hit effect
-                createExplosion(bullet.x, bullet.y);
-                
-                // Play hit sound (explosion sound at lower volume)
-                playSound('explosion');
-                
-                bullets.splice(i, 1);
-                break;
+        // Skip collision detection if there are too many enemies
+        if (enemies.length > 8) {
+            // Only check every other enemy
+            for (let j = 0; j < enemies.length; j += 2) {
+                const enemy = enemies[j];
+                if (bullet.checkCollision(enemy)) {
+                    // Apply player damage multiplier to make enemies die faster
+                    enemy.takeDamage(bullet.damage * PLAYER_DAMAGE_MULTIPLIER);
+                    
+                    // Create hit effect
+                    createExplosion(bullet.x, bullet.y);
+                    
+                    // Play hit sound (explosion sound at lower volume)
+                    playSound('explosion');
+                    
+                    bullets.splice(i, 1);
+                    break;
+                }
+            }
+        } else {
+            // Check collision against all enemies when there are fewer
+            for (const enemy of enemies) {
+                if (bullet.checkCollision(enemy)) {
+                    // Apply player damage multiplier to make enemies die faster
+                    enemy.takeDamage(bullet.damage * PLAYER_DAMAGE_MULTIPLIER);
+                    
+                    // Create hit effect
+                    createExplosion(bullet.x, bullet.y);
+                    
+                    // Play hit sound (explosion sound at lower volume)
+                    playSound('explosion');
+                    
+                    bullets.splice(i, 1);
+                    break;
+                }
             }
         }
     }
     
     // Update and draw enemy bullets
-    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+    for (let i = enemyBullets.length - 1; i >= 0 && maxBulletUpdates > 0; i--) {
+        maxBulletUpdates--;
+        
         const bullet = enemyBullets[i];
         if (!bullet.update()) {
             enemyBullets.splice(i, 1);
@@ -1351,11 +1454,25 @@ function gameLoop() {
         }
     }
     
+    // Distribute enemy updates to avoid processing all at once
+    const enemiesToUpdate = Math.min(enemies.length, 3); // Process max 3 enemies per frame
+    const enemyUpdateInterval = enemies.length > 0 ? Math.floor(enemies.length / enemiesToUpdate) : 1;
+    
     // Update and draw enemies
-    for (const enemy of enemies) {
-        enemy.update();
+    for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        
+        // Only update a subset of enemies each frame
+        if (i % enemyUpdateInterval === frameCount % enemyUpdateInterval) {
+            enemy.update();
+        }
+        
+        // Always draw all enemies
         enemy.draw();
     }
+    
+    // Increment frame counter for enemy update distribution
+    frameCount = (frameCount + 1) % 1000;
     
     // Check if we need to spawn a health pickup
     if (Date.now() - lastHealthPickupTime > HEALTH_PICKUP_INTERVAL && pickups.length < 3) {
@@ -1370,6 +1487,9 @@ function gameLoop() {
     // Request next frame
     gameLoopId = requestAnimationFrame(gameLoop);
 }
+
+// Add frameCount for distributing enemy updates
+let frameCount = 0;
 
 function drawGrid() {
     const gridSize = 40;
@@ -1543,25 +1663,56 @@ function setupEventListeners() {
 
 // Initialize game
 function init() {
+    console.log("Initializing game...");
+    
+    // Detect mobile/tablet devices
+    detectDevice();
+    
+    // Initialize canvas and context
     canvas = document.getElementById('gameCanvas');
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
     ctx = canvas.getContext('2d');
     
-    // Initialize sounds
+    if (!canvas || !ctx) {
+        console.error("Could not initialize canvas or context");
+        return;
+    }
+    
+    // Set canvas dimensions
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+    
+    // Set up control instructions text
+    const controlsText = document.getElementById('controlsText');
+    if (controlsText) {
+        controlsText.innerHTML = `
+            <span class="control-key">WASD</span> or <span class="key">ARROW KEYS</span> to move,
+            <span class="control-key">SPACEBAR</span> to fire,
+            <span class="control-key">B</span> for special bomb,
+            <span class="control-key">R</span> to restart
+        `;
+    }
+    
+    // Initialize sound system
     initSounds();
     
-    // Initialize sound toggle from checkbox state
-    soundEnabled = document.getElementById('soundToggle').checked;
+    // Set up bomb icons
+    setupBombIcons();
     
+    // Show options menu initially
+    showOptions();
+    
+    // Set up event listeners
     setupEventListeners();
     
-    // Start with options menu
-    document.getElementById('gameContainer').style.display = 'none';
-    document.getElementById('optionsMenu').style.display = 'block';
+    // Initialize mobile controls if on mobile
+    if (isMobile || isTablet) {
+        setupMobileControls();
+    }
     
-    // Add bomb icons to the bomb options
-    setupBombIcons();
+    // Initialize frame timing
+    lastFrameTime = performance.now();
+    
+    console.log("Game initialization complete");
 }
 
 function setupBombIcons() {
@@ -1952,4 +2103,229 @@ function update3DScene() {
     
     // Render the scene
     renderer.render(scene, camera);
-} 
+}
+
+// Function to detect device type
+function detectDevice() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isMobileDevice = /mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+    const isTabletDevice = /ipad|tablet/i.test(userAgent) || 
+                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
+    isMobile = isMobileDevice && !isTabletDevice;
+    isTablet = isTabletDevice;
+    
+    // Show appropriate controls instructions
+    if (isMobile || isTablet) {
+        document.getElementById('desktopControls').style.display = 'none';
+        document.getElementById('mobileControls').style.display = 'block';
+    }
+    
+    console.log(`Device detected: ${isMobile ? 'Mobile' : isTablet ? 'Tablet' : 'Desktop'}`);
+}
+
+// Set up mobile touch controls
+function setupMobileControls() {
+    const joystick = document.getElementById('joystick');
+    const joystickKnob = document.getElementById('joystickKnob');
+    const fireButton = document.getElementById('fireButton');
+    const bombButton = document.getElementById('bombButton');
+    
+    if (!joystick || !joystickKnob || !fireButton || !bombButton) {
+        console.error("Mobile control elements not found");
+        return;
+    }
+    
+    // Get joystick center position
+    const joystickRect = joystick.getBoundingClientRect();
+    joystickCenter = {
+        x: joystickRect.left + joystickRect.width / 2,
+        y: joystickRect.top + joystickRect.height / 2
+    };
+    
+    // Set max radius based on joystick size (somewhat smaller than actual size)
+    joystickMaxRadius = joystickRect.width * 0.4;
+    
+    // Joystick touch events
+    joystick.addEventListener('touchstart', handleJoystickStart);
+    joystick.addEventListener('touchmove', handleJoystickMove);
+    joystick.addEventListener('touchend', handleJoystickEnd);
+    
+    // Fire button event
+    fireButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        keys[' '] = true;
+    });
+    
+    fireButton.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        keys[' '] = false;
+    });
+    
+    // Bomb button event
+    bombButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        keys['b'] = true;
+    });
+    
+    bombButton.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        keys['b'] = false;
+    });
+    
+    // Show mobile controls
+    document.getElementById('mobileTouchControls').style.display = 'block';
+}
+
+// Joystick touch handlers
+function handleJoystickStart(e) {
+    e.preventDefault();
+    joystickActive = true;
+    updateJoystickPosition(e.touches[0]);
+}
+
+function handleJoystickMove(e) {
+    e.preventDefault();
+    if (joystickActive) {
+        updateJoystickPosition(e.touches[0]);
+    }
+}
+
+function handleJoystickEnd(e) {
+    e.preventDefault();
+    joystickActive = false;
+    resetJoystick();
+}
+
+function updateJoystickPosition(touch) {
+    // Get touch position relative to joystick center
+    const joystickRect = document.getElementById('joystick').getBoundingClientRect();
+    joystickCenter = {
+        x: joystickRect.left + joystickRect.width / 2,
+        y: joystickRect.top + joystickRect.height / 2
+    };
+    
+    const touchX = touch.clientX;
+    const touchY = touch.clientY;
+    
+    // Calculate distance from center
+    const dx = touchX - joystickCenter.x;
+    const dy = touchY - joystickCenter.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Normalize to joystick max radius
+    if (distance > joystickMaxRadius) {
+        joystickPosition.x = dx * joystickMaxRadius / distance;
+        joystickPosition.y = dy * joystickMaxRadius / distance;
+    } else {
+        joystickPosition.x = dx;
+        joystickPosition.y = dy;
+    }
+    
+    // Update joystick knob position
+    const joystickKnob = document.getElementById('joystickKnob');
+    if (joystickKnob) {
+        joystickKnob.style.transform = `translate(calc(-50% + ${joystickPosition.x}px), calc(-50% + ${joystickPosition.y}px))`;
+    }
+    
+    // Update joystick vector (normalized -1 to 1)
+    joystickVector.x = joystickPosition.x / joystickMaxRadius;
+    joystickVector.y = joystickPosition.y / joystickMaxRadius;
+    
+    // Update keys based on joystick position
+    updateKeysFromJoystick();
+}
+
+function resetJoystick() {
+    joystickPosition = { x: 0, y: 0 };
+    joystickVector = { x: 0, y: 0 };
+    
+    // Reset joystick knob position
+    const joystickKnob = document.getElementById('joystickKnob');
+    if (joystickKnob) {
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+    }
+    
+    // Reset movement keys
+    keys.ArrowUp = false;
+    keys.ArrowDown = false;
+    keys.ArrowLeft = false;
+    keys.ArrowRight = false;
+    keys.w = false;
+    keys.s = false;
+    keys.a = false;
+    keys.d = false;
+}
+
+function updateKeysFromJoystick() {
+    // Reset all movement keys
+    keys.ArrowUp = false;
+    keys.ArrowDown = false;
+    keys.ArrowLeft = false;
+    keys.ArrowRight = false;
+    keys.w = false;
+    keys.s = false;
+    keys.a = false;
+    keys.d = false;
+    
+    // Set keys based on joystick position
+    if (joystickVector.y < -0.3) {
+        keys.ArrowUp = true;
+        keys.w = true;
+    }
+    if (joystickVector.y > 0.3) {
+        keys.ArrowDown = true;
+        keys.s = true;
+    }
+    if (joystickVector.x < -0.3) {
+        keys.ArrowLeft = true;
+        keys.a = true;
+    }
+    if (joystickVector.x > 0.3) {
+        keys.ArrowRight = true;
+        keys.d = true;
+    }
+}
+
+// Add window resize event listener to handle orientation changes
+window.addEventListener('resize', function() {
+    // Recalculate joystick center position if on mobile
+    if (isMobile || isTablet) {
+        const joystick = document.getElementById('joystick');
+        if (joystick) {
+            const joystickRect = joystick.getBoundingClientRect();
+            joystickCenter = {
+                x: joystickRect.left + joystickRect.width / 2,
+                y: joystickRect.top + joystickRect.height / 2
+            };
+            joystickMaxRadius = joystickRect.width * 0.4;
+        }
+    }
+    
+    // Update device detection
+    detectDevice();
+    
+    // Update controls visibility
+    if (isMobile || isTablet) {
+        document.getElementById('mobileTouchControls').style.display = 'block';
+        document.getElementById('desktopControls').style.display = 'none';
+        document.getElementById('mobileControls').style.display = 'block';
+    } else {
+        document.getElementById('mobileTouchControls').style.display = 'none';
+        document.getElementById('desktopControls').style.display = 'block';
+        document.getElementById('mobileControls').style.display = 'none';
+    }
+});
+
+// Override resetGame to also reset joystick on mobile
+const originalResetGame = resetGame;
+resetGame = function() {
+    // Reset joystick if on mobile
+    if (isMobile || isTablet) {
+        resetJoystick();
+    }
+    
+    // Call the original resetGame function
+    originalResetGame();
+};
+  

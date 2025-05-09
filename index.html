@@ -174,6 +174,20 @@
         </div>
         <canvas id="gameCanvas"></canvas>
         <div id="threeDContainer" style="display: none;"></div>
+        
+        <!-- Mobile Touch Controls -->
+        <div id="mobileTouchControls" class="mobile-controls">
+            <div class="joystick-container">
+                <div id="joystick" class="joystick">
+                    <div id="joystickKnob" class="joystick-knob"></div>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button id="fireButton" class="action-button fire-button">FIRE</button>
+                <button id="bombButton" class="action-button bomb-button">BOMB</button>
+            </div>
+        </div>
+        
         <div id="gameOver" class="game-over">
             <h2>Game Over</h2>
             <p>Your Score: <span id="finalScore">0</span></p>
@@ -185,7 +199,8 @@
     </div>
     
     <div class="controls-info">
-        <p>Controls: <span class="key">WASD</span> or <span class="key">Arrow Keys</span> to move, <span class="key">Spacebar</span> to fire, <span class="key">B</span> for special bomb, <span class="key">R</span> to restart</p>
+        <p id="desktopControls">Controls: <span class="key">WASD</span> or <span class="key">Arrow Keys</span> to move, <span class="key">Spacebar</span> to fire, <span class="key">B</span> for special bomb, <span class="key">R</span> to restart</p>
+        <p id="mobileControls" style="display: none;">Controls: <span class="key">Joystick</span> to move, <span class="key">Fire</span> button to shoot, <span class="key">Bomb</span> button for special weapon</p>
     </div>
     
     <script src="game.js"></script>
